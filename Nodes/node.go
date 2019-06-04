@@ -87,7 +87,7 @@ func (n *node) sendMsg(msg Msg, addr *net.UDPAddr) {
 // String sum is result got from peer in echo msg
 // Convert string sum to int, add nodes mem, return both as string
 func (n *node) setDataForEcho(sumFromPeer string) string {
-	fmt.Println("Echo Msg built")
+	//fmt.Println("Echo Msg built")
 	peersMem, err := strconv.Atoi(sumFromPeer)
 	if err != nil {
 		fmt.Println("Error at Atoi: ", err)
@@ -123,18 +123,31 @@ func (n *node) sendInfoMsg(peerAddr *net.UDPAddr) {
 
 func (n *node) receiveStartMsg(msg Msg) {
 	n.initiator = true
+	fmt.Println("initiator")
 	for _, addr := range n.neighbourAddrs {
 		n.sendInfoMsg(addr)
 	}
 }
 
-func (n *node) receiveInfoMsg(msg Msg, addr *net.UDPAddr) {
+func (n *node) receiveIEMsg(msg *Msg, addr *net.UDPAddr) bool {
+	ret := false
 	n.neighboursInformed++
 	fmt.Println("No of Neighbours is ", len(n.neighbourAddrs))
-	fmt.Println(" Informed are ", n.neighboursInformed)
+	fmt.Println("Informed are ", n.neighboursInformed)
+	// TODO von echo msg speicher data, also current sum, we
+	// wenn dann alle fertig sind, rechne deine sum dazu und schicke zurück
+	if msg.MsgType == echo {
+		peersMem, err := strconv.Atoi(msg.Data)
+		if err != nil {
+			fmt.Println("Error at Atoi: ", err)
+		}
+		n.sumOfMem += peersMem
+	}
+
 	// Got the first info msg
 	if n.informed == false {
 		n.informed = true
+		fmt.Println("informed")
 		// Safe edge in spanning tree
 		n.echoNodeAddr = addr
 		// Inform all neighbours except echo node
@@ -142,20 +155,25 @@ func (n *node) receiveInfoMsg(msg Msg, addr *net.UDPAddr) {
 			if neighbour != n.echoNodeAddr {
 				n.sendInfoMsg(neighbour)
 			}
-			//fmt.Println("All neighbours informed")
 		}
+		fmt.Println("send info to all neighbours")
 	}
+
 	// If all neighbours are finished
 	// send echo msg
 	// to logger if node is initiator
 	// or to echo node if node is not initiator
 	if n.neighboursInformed == len(n.neighbourAddrs) {
+		ret = true
 		//n.finished = true
-		if n.initiator {
+		if n.initiator == true {
 			var resultMsg Msg
 			resultMsg.SenderAddr = n.localAddr
 			resultMsg.MsgType = result
-			resultMsg.Data = n.setDataForEcho(msg.Data)
+			currSum := n.sumOfMem + n.mem
+			fmt.Println("current sum is ", currSum)
+
+			resultMsg.Data = strconv.Itoa(currSum)
 
 			n.sendMsg(resultMsg, n.loggerAddr)
 			fmt.Println("result sent")
@@ -164,11 +182,14 @@ func (n *node) receiveInfoMsg(msg Msg, addr *net.UDPAddr) {
 			echoMsg.SenderAddr = n.localAddr
 			echoMsg.MsgType = echo
 
-			echoMsg.Data = n.setDataForEcho(msg.Data)
+			currSum := n.sumOfMem + n.mem
+			fmt.Println("current sum is ", currSum)
+			echoMsg.Data = strconv.Itoa(currSum)
 			n.sendMsg(echoMsg, n.echoNodeAddr)
 			fmt.Println("echo sent")
 		}
 
 		fmt.Println("I am finished")
 	}
+	return ret
 }

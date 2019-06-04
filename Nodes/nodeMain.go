@@ -26,9 +26,9 @@ func main() {
 	startupMsg.Data = "Node " + node.localAddr.String() + " is up.\n"
 	node.sendLogMsg(startupMsg)
 	fmt.Println("Startup msg sent")
-
+	finished := false
 	// loop to get msgs while not send an echo or result msg
-	for {
+	for finished == false {
 		byteArray := make([]byte, 1024)
 		var currMsg Msg
 		//fmt.Println("in for loop")
@@ -58,7 +58,7 @@ func main() {
 			node.receiveStartMsg(currMsg)
 		case info, echo:
 			//fmt.Println("got info or echo msg")
-			node.receiveInfoMsg(currMsg, senderAddr)
+			finished = node.receiveIEMsg(&currMsg, senderAddr)
 		default:
 			fmt.Println("Received msg with unexpected type ", currMsg.MsgType)
 		}
