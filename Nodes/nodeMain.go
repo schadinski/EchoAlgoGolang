@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 )
 
 func main() {
@@ -25,19 +26,15 @@ func main() {
 	startupMsg.MsgType = logging
 	startupMsg.Data = "Node " + node.localAddr.String() + " is up.\n"
 	node.sendLogMsg(startupMsg)
-	fmt.Println("Startup msg sent")
-	finished := false
-	// loop to get msgs while not send an echo or result msg
-	for finished == false {
+
+	for {
 		byteArray := make([]byte, 1024)
 		var currMsg Msg
-		//fmt.Println("in for loop")
 		// Read newest msg from udp connection in byteArray
 		_, senderAddr, err := conn.ReadFromUDP(byteArray)
 		if err != nil {
 			fmt.Println("Error at ReadFromUDP:", err)
 		}
-		//fmt.Println("after read from udp")
 		// cast byte[] to buffer
 		buffer := bytes.NewBuffer(byteArray)
 		// Decoding
@@ -49,22 +46,22 @@ func main() {
 		// Simulate network delay 0<x<=99 milliseconds
 		NetworkDelay()
 
-		//fmt.Println("after network delay")
 		node.sendLogMsg(currMsg)
 
 		switch currMsg.MsgType {
 		case start:
-			fmt.Println("got start msg")
 			node.receiveStartMsg(currMsg)
-		case info, echo:
-			//fmt.Println("got info or echo msg")
-			finished = node.receiveIEMsg(&currMsg, senderAddr)
+		case info:
+			node.receiveIEMsg(&currMsg, senderAddr)
+		case echo:
+			peersMem, err := strconv.Atoi(currMsg.Data)
+			if err != nil {
+				fmt.Println("Error at Atoi: ", err)
+			}
+			node.sumOfMem += peersMem
+			node.receiveIEMsg(&currMsg, senderAddr)
 		default:
-			fmt.Println("Received msg with unexpected type ", currMsg.MsgType)
+			fmt.Println("Received msg with unexpected type ", currMsg.getStringForType())
 		}
-	}
-	fmt.Println("Finished")
-	for {
-
 	}
 }

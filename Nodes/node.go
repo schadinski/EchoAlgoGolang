@@ -21,25 +21,21 @@ type node struct {
 	informed           bool
 	initiator          bool
 	neighboursInformed int
-	//finished           bool
 }
 
 // NewNode is constructor for struct node
 func newNode(args []string) *node {
 	n := &node{}
-	//LocalAddr
 	n.localAddr = BuildUDPAddr(os.Args[1])
-	// logger address
 	n.loggerAddr = BuildUDPAddr(os.Args[2])
 	noOfNeighbours := len(os.Args) - 4
 	n.neighbourAddrs = make([]*net.UDPAddr, noOfNeighbours)
 	n.setNeighbours(os.Args[4:len(os.Args)], noOfNeighbours)
 	n.setMem(os.Args[3])
-	n.sumOfMem = 0 //TODO ist das richtig? oder muss es bereits mein mem enthalten?
+	n.sumOfMem = 0
 	n.informed = false
 	n.initiator = false
 	n.neighboursInformed = 0
-	//n.finished = false
 	return n
 }
 
@@ -60,7 +56,7 @@ func (n *node) setNeighbours(allAddrs []string, noOfNeighbours int) {
 }
 
 // Sends any type of msg to given addr
-func (n *node) sendMsg(msg Msg, addr *net.UDPAddr) {
+func (n *node) sendMsg(msg *Msg, addr *net.UDPAddr) {
 	var buffer bytes.Buffer
 	byteArray := make([]byte, 1024)
 
@@ -87,7 +83,6 @@ func (n *node) sendMsg(msg Msg, addr *net.UDPAddr) {
 // String sum is result got from peer in echo msg
 // Convert string sum to int, add nodes mem, return both as string
 func (n *node) setDataForEcho(sumFromPeer string) string {
-	//fmt.Println("Echo Msg built")
 	peersMem, err := strconv.Atoi(sumFromPeer)
 	if err != nil {
 		fmt.Println("Error at Atoi: ", err)
@@ -105,10 +100,8 @@ func (n *node) sendLogMsg(msg Msg) {
 		"to " + n.localAddr.String() +
 		"\nwith type " + msg.getStringForType() +
 		"\ndata: " + msg.Data
-
 	logMsg.Data = logInfo
-
-	n.sendMsg(logMsg, n.loggerAddr)
+	n.sendMsg(&logMsg, n.loggerAddr)
 }
 
 func (n *node) sendInfoMsg(peerAddr *net.UDPAddr) {
@@ -117,46 +110,31 @@ func (n *node) sendInfoMsg(peerAddr *net.UDPAddr) {
 	infoMsg.SenderAddr = n.localAddr
 	infoMsg.MsgType = info
 	infoMsg.Data = "0"
-
-	n.sendMsg(infoMsg, peerAddr)
+	n.sendMsg(&infoMsg, peerAddr)
 }
 
 func (n *node) receiveStartMsg(msg Msg) {
 	n.initiator = true
-	fmt.Println("initiator")
+	n.informed = true
 	for _, addr := range n.neighbourAddrs {
 		n.sendInfoMsg(addr)
 	}
 }
 
-func (n *node) receiveIEMsg(msg *Msg, addr *net.UDPAddr) bool {
-	ret := false
+func (n *node) receiveIEMsg(msg *Msg, addr *net.UDPAddr) {
 	n.neighboursInformed++
-	fmt.Println("No of Neighbours is ", len(n.neighbourAddrs))
-	fmt.Println("Informed are ", n.neighboursInformed)
-	// TODO von echo msg speicher data, also current sum, we
-	// wenn dann alle fertig sind, rechne deine sum dazu und schicke zurück
-	if msg.MsgType == echo {
-		peersMem, err := strconv.Atoi(msg.Data)
-		if err != nil {
-			fmt.Println("Error at Atoi: ", err)
-		}
-		n.sumOfMem += peersMem
-	}
 
 	// Got the first info msg
 	if n.informed == false {
 		n.informed = true
-		fmt.Println("informed")
 		// Safe edge in spanning tree
 		n.echoNodeAddr = addr
 		// Inform all neighbours except echo node
 		for _, neighbour := range n.neighbourAddrs {
-			if neighbour != n.echoNodeAddr {
+			if neighbour.String() != addr.String() {
 				n.sendInfoMsg(neighbour)
 			}
 		}
-		fmt.Println("send info to all neighbours")
 	}
 
 	// If all neighbours are finished
@@ -164,32 +142,20 @@ func (n *node) receiveIEMsg(msg *Msg, addr *net.UDPAddr) bool {
 	// to logger if node is initiator
 	// or to echo node if node is not initiator
 	if n.neighboursInformed == len(n.neighbourAddrs) {
-		ret = true
-		//n.finished = true
 		if n.initiator == true {
 			var resultMsg Msg
 			resultMsg.SenderAddr = n.localAddr
 			resultMsg.MsgType = result
 			currSum := n.sumOfMem + n.mem
-			fmt.Println("current sum is ", currSum)
-
 			resultMsg.Data = strconv.Itoa(currSum)
-
-			n.sendMsg(resultMsg, n.loggerAddr)
-			fmt.Println("result sent")
+			n.sendMsg(&resultMsg, n.loggerAddr)
 		} else {
 			var echoMsg Msg
 			echoMsg.SenderAddr = n.localAddr
 			echoMsg.MsgType = echo
-
 			currSum := n.sumOfMem + n.mem
-			fmt.Println("current sum is ", currSum)
 			echoMsg.Data = strconv.Itoa(currSum)
-			n.sendMsg(echoMsg, n.echoNodeAddr)
-			fmt.Println("echo sent")
+			n.sendMsg(&echoMsg, n.echoNodeAddr)
 		}
-
-		fmt.Println("I am finished")
 	}
-	return ret
 }
